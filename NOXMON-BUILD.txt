@@ -1,1 +1,2 @@
 Build request for NOX Launcher with the bundled NoxMon auto-installer.
+Trigger: 2026-09-17T13:25:00Z
