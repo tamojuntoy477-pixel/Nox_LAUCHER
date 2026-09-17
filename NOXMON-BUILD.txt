@@ -1,0 +1,1 @@
+Build request for NOX Launcher with the bundled NoxMon auto-installer.
