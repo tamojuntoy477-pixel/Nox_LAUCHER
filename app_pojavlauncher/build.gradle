@@ -68,7 +68,7 @@ configurations {
 android {
     namespace 'net.kdt.pojavlaunch'
 
-    compileSdk = 35
+    compileSdk = 37
 
     signingConfigs {
         customDebug {
@@ -121,13 +121,11 @@ android {
         }
         proguard {
             initWith debug
-            matchingFallbacks = ['debug']
             minifyEnabled true
             shrinkResources true
         }
         proguardNoDebug {
             initWith proguard
-            matchingFallbacks = ['debug']
             debuggable false
         }
 
@@ -142,8 +140,8 @@ android {
         }
         gplay {
             initWith release
-            matchingFallbacks = ['release']
             signingConfig signingConfigs.googlePlayBuild
+            matchingFallbacks = [ 'release' ]
         }
     }
 
@@ -208,26 +206,19 @@ dependencies {
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation 'androidx.viewpager2:viewpager2:1.1.0-beta01'
     implementation 'androidx.annotation:annotation:1.5.0'
-
     implementation "androidx.constraintlayout:constraintlayout:2.1.4"
-
     implementation 'com.github.duanhong169:checkerboarddrawable:1.0.2'
     implementation 'com.github.PojavLauncherTeam:portrait-sdp:ed33e89cbc'
     implementation 'com.github.PojavLauncherTeam:portrait-ssp:6c02fd739b'
     implementation 'com.github.Mathias-Boulay:ExtendedView:1.0.0'
     implementation 'com.github.Mathias-Boulay:android_gamepad_remapper:2.0.3'
     implementation 'com.github.Mathias-Boulay:virtual-joystick-android:1.14'
-
     implementation 'org.tukaani:xz:1.8'
     implementation 'net.sourceforge.htmlcleaner:htmlcleaner:2.6.1'
     implementation 'com.bytedance:bytehook:1.0.10'
-
     implementation 'top.fifthlight.touchcontroller:proxy-client-android:0.0.4'
-
     implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
-
     implementation "net.java.dev.jna:jna:5.14.0@aar"
-
     implementation project(":androidnsbypass")
     implementation project(":noxmon_autoinstall")
 }
