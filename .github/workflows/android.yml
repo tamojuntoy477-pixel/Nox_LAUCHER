@@ -1,4 +1,4 @@
-name: NOX Launcher APK
+name: Lap Launcher APK
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: nox-build-${{ github.ref }}
+  group: lap-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -45,14 +45,14 @@ jobs:
         run: |
           bash scripts/languagelist_updater.sh
           if [ ! -f app_pojavlauncher/debug.keystore ]; then
-            keytool -genkeypair -keystore app_pojavlauncher/debug.keystore -storepass android -keypass android -alias androiddebugkey -dname "CN=NOX Debug" -keyalg RSA -validity 10000 -noprompt
+            keytool -genkeypair -keystore app_pojavlauncher/debug.keystore -storepass android -keypass android -alias androiddebugkey -dname "CN=Lap Launcher Debug" -keyalg RSA -validity 10000 -noprompt
           fi
       - name: Build APK
         run: gradle :app_pojavlauncher:assembleDebug --stacktrace
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NOX-Launcher-APK
+          name: Lap-Launcher-APK
           path: app_pojavlauncher/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
