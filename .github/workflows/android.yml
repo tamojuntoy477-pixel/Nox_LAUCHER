@@ -3,6 +3,8 @@ name: Lap Launcher APK
 on:
   push:
     branches: [v3_openjdk]
+  pull_request:
+    branches: [v3_openjdk]
   workflow_dispatch:
 
 permissions:
