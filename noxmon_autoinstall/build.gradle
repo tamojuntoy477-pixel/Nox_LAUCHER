@@ -10,6 +10,21 @@ android {
         minSdkVersion 21
     }
 
+    buildTypes {
+        debug {}
+        proguard {
+            initWith debug
+        }
+        proguardNoDebug {
+            initWith proguard
+            debuggable false
+        }
+        release {}
+        gplay {
+            initWith release
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
