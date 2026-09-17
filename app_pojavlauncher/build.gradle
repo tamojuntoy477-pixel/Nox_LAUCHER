@@ -68,7 +68,11 @@ configurations {
 android {
     namespace 'net.kdt.pojavlaunch'
 
-    compileSdk = 37
+    compileSdk {
+        version = release(36) {
+            it.minorApiLevel = 1
+        }
+    }
 
     signingConfigs {
         customDebug {
@@ -111,7 +115,7 @@ android {
             applicationIdSuffix '.debug'
             minifyEnabled false
             shrinkResources false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultproguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.customDebug
             resValue "string", "app_name", "NOX Launcher"
             resValue "string", "app_short_name", "NOX Launcher"
