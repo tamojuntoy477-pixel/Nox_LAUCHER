@@ -1,0 +1,190 @@
+name: Build WhatsApp 2 APK
+
+on:
+  push:
+    branches: [whatsapp2-apk-v2]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - uses: android-actions/setup-android@v3
+
+      - name: Create Android project
+        shell: bash
+        run: |
+          rm -rf whatsapp2-build
+          mkdir -p whatsapp2-build/app/src/main/java/com/nox/whatsapp2
+          mkdir -p whatsapp2-build/app/src/main/assets
+          mkdir -p whatsapp2-build/app/src/main/res/drawable
+          mkdir -p whatsapp2-build/app/src/main/res/values
+
+          cat > whatsapp2-build/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'WhatsApp2Conceito'
+          include ':app'
+          EOF
+
+          cat > whatsapp2-build/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > whatsapp2-build/app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.nox.whatsapp2'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.nox.whatsapp2'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 2
+                  versionName '2.0'
+              }
+          }
+          EOF
+
+          cat > whatsapp2-build/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="WhatsApp 2"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="false">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="portrait">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > whatsapp2-build/app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:statusBarColor">#0B141A</item>
+                  <item name="android:navigationBarColor">#0B141A</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > whatsapp2-build/app/src/main/res/drawable/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#25D366" android:pathData="M54,6A48,48 0,1 0,54 102A48,48 0,1 0,54 6"/>
+              <path android:fillColor="#0B141A" android:pathData="M30,34C30,28 35,24 41,24H67C73,24 78,28 78,34V61C78,67 73,71 67,71H51L37,82V71H41C35,71 30,67 30,61Z"/>
+              <path android:fillColor="#25D366" android:pathData="M42,41H66V46H42ZM42,51H66V56H42Z"/>
+          </vector>
+          EOF
+
+          cat > whatsapp2-build/app/src/main/java/com/nox/whatsapp2/MainActivity.java <<'EOF'
+          package com.nox.whatsapp2;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(false);
+                  settings.setBuiltInZoomControls(false);
+                  settings.setDisplayZoomControls(false);
+
+                  webView.setWebChromeClient(new WebChromeClient());
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+
+              @Override
+              protected void onDestroy() {
+                  if (webView != null) webView.destroy();
+                  super.onDestroy();
+              }
+          }
+          EOF
+
+          echo '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' | base64 -d | gzip -d > whatsapp2-build/app/src/main/assets/index.html
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build APK
+        working-directory: whatsapp2-build
+        run: gradle --no-daemon assembleDebug
+
+      - name: Prepare APK
+        shell: bash
+        run: cp whatsapp2-build/app/build/outputs/apk/debug/app-debug.apk WhatsApp2-v2.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WhatsApp2-v2-APK
+          path: WhatsApp2-v2.apk
+          if-no-files-found: error
