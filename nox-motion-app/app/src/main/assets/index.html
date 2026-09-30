@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#090a0d">
+<title>NOX Motion Real</title>
+<style>
+:root{--bg:#090a0d;--card:#12141a;--line:#262a34;--text:#f7f8fb;--muted:#aab1bf;--accent:#7c3aed}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{padding:14px 10px 24px}
+.top{display:flex;align-items:center;justify-content:space-between;margin:4px 3px 13px}
+.brand{font-size:21px;font-weight:950}.brand b{color:#a78bfa}.pill{font-size:11px;padding:7px 9px;border-radius:999px;background:#14201b;border:1px solid #284735;color:#bff6d3}
+.stage{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.panel{position:relative;overflow:hidden;border-radius:17px;border:1px solid var(--line);background:#06070a;aspect-ratio:3/5;min-height:265px}
+video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+video{transform:scaleX(-1);background:#030407}.label{position:absolute;top:8px;left:8px;z-index:4;padding:5px 8px;border-radius:999px;background:#050609c9;border:1px solid #343945;font-size:10px}
+.status{min-height:20px;margin:11px 3px 0;color:var(--muted);font-size:12px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
+button,select{border:0;border-radius:14px;padding:13px 10px;font-weight:850;font-size:14px}
+button.primary{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff}
+button.secondary,select{background:#171a21;border:1px solid #2c313d;color:#f4f6fb}
+.wide{grid-column:1/-1}.tip{margin-top:12px;padding:11px 12px;border:1px solid #222734;background:#101218;border-radius:14px;color:#aeb6c6;font-size:11px;line-height:1.45}
+button:disabled{opacity:.55}
+</style>
+</head>
+<body>
+<div class="top"><div class="brand">NOX <b>Motion Real</b></div><div id="engine" class="pill">IA desligada</div></div>
+
+<div class="stage">
+  <div class="panel"><video id="cam" playsinline muted></video><div class="label">VOCÊ</div></div>
+  <div class="panel"><canvas id="avatar" width="540" height="900"></canvas><div class="label">PERSONAGEM</div></div>
+</div>
+
+<div class="status" id="status">Toque em “Ligar câmera”.</div>
+<div class="controls">
+  <button id="start" class="primary">Ligar câmera</button>
+  <button id="flip" class="secondary">Trocar câmera</button>
+  <select id="skin" class="wide">
+    <option value="street">Pessoa realista — Street</option>
+    <option value="sport">Pessoa realista — Sport</option>
+    <option value="dark">Pessoa realista — Dark</option>
+  </select>
+  <button id="stop" class="secondary wide" disabled>Parar</button>
+</div>
+<div class="tip">Fique com o corpo inteiro visível. O app usa IA para detectar sua pose e o personagem humano copia braços, pernas, cabeça e tronco em tempo real.</div>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs";
+
+const video=document.getElementById('cam'),canvas=document.getElementById('avatar'),ctx=canvas.getContext('2d');
+const statusEl=document.getElementById('status'),engineEl=document.getElementById('engine');
+const startBtn=document.getElementById('start'),stopBtn=document.getElementById('stop'),flipBtn=document.getElementById('flip'),skin=document.getElementById('skin');
+
+let landmarker=null,stream=null,running=false,facingMode='user',lastVideoTime=-1,smoothed=null,raf=0;
+const POSE_MODEL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const WASM='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
+
+function style(){
+  if(skin.value==='sport') return {skin:'#c98663',skin2:'#8f5039',hair:'#1b1717',shirt:'#f4f5f7',shirt2:'#b8bdc7',pants:'#171b24',shoe:'#f2f2f2'};
+  if(skin.value==='dark') return {skin:'#74452f',skin2:'#4e2b20',hair:'#090909',shirt:'#16171b',shirt2:'#32343c',pants:'#08090c',shoe:'#20232a'};
+  return {skin:'#bd7955',skin2:'#7c4734',hair:'#1c1411',shirt:'#33206b',shirt2:'#6d4bc3',pants:'#202a3c',shoe:'#e9edf4'};
+}
+function bg(){
+  const g=ctx.createLinearGradient(0,0,0,canvas.height);g.addColorStop(0,'#24252b');g.addColorStop(.55,'#111318');g.addColorStop(1,'#08090c');ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#ffffff0b';for(let i=0;i<8;i++)ctx.fillRect(0,110+i*95,canvas.width,1);
+}
+function P(p){return{x:(1-p.x)*canvas.width,y:p.y*canvas.height}}
+function line(a,b,w,c,shadow=0){
+  if(!a||!b)return;const A=P(a),B=P(b);ctx.save();ctx.lineCap='round';ctx.lineWidth=w;ctx.strokeStyle=c;
+  if(shadow){ctx.shadowBlur=shadow;ctx.shadowColor='#000a'}ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();ctx.restore();
+}
+function joint(p,r,c){if(!p)return;const q=P(p);ctx.fillStyle=c;ctx.beginPath();ctx.arc(q.x,q.y,r,0,Math.PI*2);ctx.fill()}
+function poly(ids,pts,fill,stroke){
+  if(ids.some(i=>!pts[i]))return;ctx.beginPath();ids.forEach((i,k)=>{const q=P(pts[i]);k?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)});ctx.closePath();ctx.fillStyle=fill;ctx.fill();
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=3;ctx.stroke()}
+}
+function face(points,sw,s){
+  const nose=P(points[0]),le=P(points[2]),re=P(points[5]),lm=P(points[9]),rm=P(points[10]);
+  const rx=Math.max(23,Math.min(54,sw*.27)),ry=rx*1.22;
+  const grd=ctx.createRadialGradient(nose.x-rx*.25,nose.y-ry*.35,4,nose.x,nose.y,ry);
+  grd.addColorStop(0,'#f3c1a7');grd.addColorStop(.62,s.skin);grd.addColorStop(1,s.skin2);
+  ctx.save();ctx.shadowBlur=13;ctx.shadowColor='#0008';ctx.fillStyle=grd;ctx.beginPath();ctx.ellipse(nose.x,nose.y-15,rx,ry,0,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.fillStyle=s.hair;ctx.beginPath();ctx.ellipse(nose.x,nose.y-15-ry*.58,rx*.98,ry*.55,0,Math.PI,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#161719';
+  for(const e of [le,re]){ctx.beginPath();ctx.ellipse(e.x,e.y,4.2,2.8,0,0,Math.PI*2);ctx.fill()}
+  ctx.strokeStyle='#6f302a';ctx.lineWidth=2.3;ctx.beginPath();ctx.moveTo(lm.x,lm.y);ctx.quadraticCurveTo(nose.x,lm.y+6,rm.x,rm.y);ctx.stroke();
+}
+function drawIdle(){
+  bg();const s=style();ctx.save();ctx.translate(canvas.width/2,canvas.height/2-40);
+  ctx.shadowBlur=20;ctx.shadowColor='#000a';ctx.lineCap='round';
+  ctx.strokeStyle=s.pants;ctx.lineWidth=44;ctx.beginPath();ctx.moveTo(-25,80);ctx.lineTo(-58,265);ctx.moveTo(25,80);ctx.lineTo(58,265);ctx.stroke();
+  ctx.strokeStyle=s.skin;ctx.lineWidth=28;ctx.beginPath();ctx.moveTo(-76,-65);ctx.lineTo(-118,85);ctx.moveTo(76,-65);ctx.lineTo(118,85);ctx.stroke();
+  const g=ctx.createLinearGradient(-80,-120,80,120);g.addColorStop(0,s.shirt2);g.addColorStop(1,s.shirt);ctx.fillStyle=g;ctx.beginPath();ctx.roundRect(-84,-95,168,190,28);ctx.fill();
+  ctx.fillStyle=s.skin;ctx.beginPath();ctx.ellipse(0,-165,48,60,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=s.hair;ctx.beginPath();ctx.ellipse(0,-194,47,28,0,Math.PI,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#15171a';ctx.beginPath();ctx.arc(-17,-165,4,0,7);ctx.arc(17,-165,4,0,7);ctx.fill();
+  ctx.restore();
+}
+function drawHuman(points){
+  bg();const s=style(),ls=P(points[11]),rs=P(points[12]);const sw=Math.max(75,Math.hypot(ls.x-rs.x,ls.y-rs.y));
+  ctx.save();ctx.shadowBlur=12;ctx.shadowColor='#0008';
+  line(points[23],points[25],sw*.24,s.pants,5);line(points[25],points[27],sw*.22,s.pants,5);
+  line(points[24],points[26],sw*.24,s.pants,5);line(points[26],points[28],sw*.22,s.pants,5);
+  line(points[27],points[31],sw*.16,s.shoe,3);line(points[28],points[32],sw*.16,s.shoe,3);
+
+  line(points[11],points[13],sw*.18,s.shirt2,4);line(points[12],points[14],sw*.18,s.shirt2,4);
+  line(points[13],points[15],sw*.145,s.skin,4);line(points[14],points[16],sw*.145,s.skin,4);
+  joint(points[15],sw*.08,s.skin);joint(points[16],sw*.08,s.skin);
+
+  const tg=ctx.createLinearGradient(0,ls.y,0,P(points[23]).y);tg.addColorStop(0,s.shirt2);tg.addColorStop(1,s.shirt);
+  poly([11,12,24,23],points,tg,'#0003');
+  line(points[11],points[23],sw*.07,s.shirt,0);line(points[12],points[24],sw*.07,s.shirt,0);
+  line(points[0],points[11],sw*.105,s.skin,2);line(points[0],points[12],sw*.105,s.skin,2);
+  face(points,sw,s);
+  ctx.restore();
+}
+function smooth(points){
+  if(!smoothed){smoothed=points.map(x=>({...x}));return smoothed}
+  const a=.38;for(let i=0;i<points.length;i++){smoothed[i].x+=(points[i].x-smoothed[i].x)*a;smoothed[i].y+=(points[i].y-smoothed[i].y)*a;smoothed[i].z+=((points[i].z||0)-(smoothed[i].z||0))*a;smoothed[i].visibility=points[i].visibility}
+  return smoothed;
+}
+async function ensureModel(){
+  if(landmarker)return;
+  statusEl.textContent='Carregando IA de movimento…';engineEl.textContent='Carregando IA';
+  const vision=await FilesetResolver.forVisionTasks(WASM);
+  try{landmarker=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:POSE_MODEL,delegate:'GPU'},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5})}
+  catch(e){landmarker=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:POSE_MODEL,delegate:'CPU'},runningMode:'VIDEO',numPoses:1})}
+  engineEl.textContent='IA pronta';
+}
+async function startCamera(){
+  try{
+    await ensureModel();if(stream)stream.getTracks().forEach(t=>t.stop());
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facingMode},width:{ideal:720},height:{ideal:1280}}});
+    video.srcObject=stream;await video.play();running=true;smoothed=null;lastVideoTime=-1;startBtn.disabled=true;stopBtn.disabled=false;statusEl.textContent='Detectando seu corpo…';loop();
+  }catch(e){console.error(e);statusEl.textContent='Não consegui abrir a câmera. Libere a permissão e tente novamente.';engineEl.textContent='Erro'}
+}
+function stopCamera(){running=false;cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;smoothed=null;startBtn.disabled=false;stopBtn.disabled=true;engineEl.textContent=landmarker?'IA pronta':'IA desligada';statusEl.textContent='Câmera parada.';drawIdle()}
+async function flipCamera(){facingMode=facingMode==='user'?'environment':'user';if(running)await startCamera()}
+function loop(){
+  if(!running)return;
+  if(video.readyState>=2&&video.currentTime!==lastVideoTime){
+    lastVideoTime=video.currentTime;
+    try{const r=landmarker.detectForVideo(video,performance.now());if(r.landmarks&&r.landmarks.length){drawHuman(smooth(r.landmarks[0]));statusEl.textContent='Personagem copiando seus movimentos.';engineEl.textContent='Rastreando'}else{statusEl.textContent='Mostre o corpo inteiro para a câmera.';engineEl.textContent='Procurando pose'}}catch(e){console.error(e)}
+  }
+  raf=requestAnimationFrame(loop);
+}
+startBtn.onclick=startCamera;stopBtn.onclick=stopCamera;flipBtn.onclick=flipCamera;skin.onchange=()=>{if(!smoothed)drawIdle()};drawIdle();
+</script>
+</body>
+</html>
