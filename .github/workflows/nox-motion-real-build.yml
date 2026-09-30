@@ -1,0 +1,53 @@
+name: Build NOX Motion Real APK
+
+on:
+  push:
+    branches:
+      - nox-motion-real-apk
+    paths:
+      - 'nox-motion-app/**'
+      - '.github/workflows/nox-motion-real-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download NOX Motion source
+        shell: bash
+        run: |
+          set -e
+          BASE="https://raw.githubusercontent.com/tamojuntoy477-pixel/Nox_LAUCHER/nox-motion-real-apk/nox-motion-app"
+          mkdir -p nox-motion-app/app/src/main/java/com/noxmotion/real
+          mkdir -p nox-motion-app/app/src/main/assets
+          curl -fsSL "$BASE/settings.gradle" -o nox-motion-app/settings.gradle
+          curl -fsSL "$BASE/build.gradle" -o nox-motion-app/build.gradle
+          curl -fsSL "$BASE/gradle.properties" -o nox-motion-app/gradle.properties
+          curl -fsSL "$BASE/app/build.gradle" -o nox-motion-app/app/build.gradle
+          curl -fsSL "$BASE/app/src/main/AndroidManifest.xml" -o nox-motion-app/app/src/main/AndroidManifest.xml
+          curl -fsSL "$BASE/app/src/main/java/com/noxmotion/real/MainActivity.java" -o nox-motion-app/app/src/main/java/com/noxmotion/real/MainActivity.java
+          curl -fsSL "$BASE/app/src/main/assets/index.html" -o nox-motion-app/app/src/main/assets/index.html
+
+      - name: Build APK
+        run: gradle -p nox-motion-app :app:assembleDebug --stacktrace
+
+      - name: Rename APK
+        run: cp nox-motion-app/app/build/outputs/apk/debug/app-debug.apk NOX-Motion-Real.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOX-Motion-Real-APK
+          path: NOX-Motion-Real.apk
+          retention-days: 7
